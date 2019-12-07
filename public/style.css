@@ -1,0 +1,28 @@
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#title {
+  margin: auto;
+  padding: 10px;
+}
+
+#backdrop {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background-color: rgb(233, 233, 233);
+}
+
+li#token {
+  max-width: 100px;
+}
+
+.hidden {
+  display: none;
+}
