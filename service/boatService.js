@@ -2,7 +2,9 @@
 
 const { Datastore } = require('@google-cloud/datastore');
 const { Boat } = require('../models/Boat');
+const { Load } = require('../models/Load');
 const { project } = require('../project')
+const loadController = require('../controller/load')
 
 const limit = project.response.limit;
 const projectId = project.id;   
@@ -30,6 +32,7 @@ exports.createBoat = async boat => {
                 'name': boat.name,
                 'type': boat.type,
                 'length': parseInt(boat['length']),
+                'loads': [],
                 'owner_id': boat.owner_id,
                 'owner': boat.owner
             }
@@ -66,6 +69,7 @@ exports.listBoats = async (cursor, sub) => {
             'id': parseInt(entity[datastore.KEY].id),
             'name': entity.name,
             'type': entity.type,
+            'loads': entity.loads,
             'length': entity['length'],
             'owner': entity.owner
         });
@@ -115,7 +119,7 @@ exports.deleteBoat = async (boatId, owner_id) => {
         throw err
     }
 }
-exports.updateBoat = async (properties, id) => {
+exports.updateBoat = async (new_boat, id) => {
     let transaction = datastore.transaction();
     let boatKey = createKey(Boat, id);
     
@@ -123,9 +127,51 @@ exports.updateBoat = async (properties, id) => {
         await transaction.run();
         const [boat] = await transaction.get(boatKey);
         if (!boat) { throw { 'status': 404, 'details': `Boat id: ${id} not found` } }
-        boat.name = (properties.name) ? properties.name : boat.name
-        boat.type = (properties.type) ? properties.type : boat.type
-        boat['length'] = (properties['length']) ? properties['length'] : boat['length']
+        boat.name = (new_boat.name) ? new_boat.name : boat.name
+        boat.type = (new_boat.type) ? new_boat.type : boat.type
+        boat['length'] = (new_boat['length']) ? new_boat['length'] : boat['length']
+
+        // If new boat has a loads array, and the old boat also has a loads array
+        // Then remove all loads on old boat, and then add all loads from new boat 
+        if(hasLoads(new_boat) && hasLoads(boat)){
+            boat.loads.forEach(async load_id => {
+                let loadKey = createKey(Load, load_id);
+                let [load] = await transaction.get(loadKey)
+                if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
+                load.boat = null
+                await transaction.save({
+                    'key': loadKey,
+                    'data': load 
+                });
+            })
+            new_boat.loads.forEach(async load_id => {
+                let loadKey = createKey(Load, load_id);
+                let [load] = await transaction.get(loadKey)
+                if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
+                load.boat = boatKey.id
+                await transaction.save({
+                    'key': loadKey,
+                    'data': load 
+                });
+            });
+            boat.loads = new_boat.loads
+        }
+        // else if new boat has loads, and the old boat does not,
+        // Then simply add the new loads to the boat. Nothing to remove 
+        else if(hasLoads(new_boat) && !hasLoads(boat)){
+            new_boat.loads.forEach(async load_id => {
+                let loadKey = createKey(Load, load_id);
+                let [load] = await transaction.get(loadKey)
+                if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
+                load.boat = boatKey.id
+                await transaction.save({
+                    'key': loadKey,
+                    'data': load 
+                });
+            });
+            boat.loads = new_boat.loads
+        }
+
         await transaction.save({
             'key': boatKey,
             'data': boat
@@ -189,7 +235,12 @@ function getParentId() {
         });
 }
 
-
+function hasLoads(boatProps){
+    if(Array.isArray(boatProps.loads) && boatProps.loads.length !== 0){
+        return true
+    }
+    return false
+}
 // const service = {
 //     'createBoat': createBoat,
 //     'listBoats': listBoats,

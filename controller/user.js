@@ -1,7 +1,4 @@
 const userService = require('../service/userService');
-var access_token;
-var state;
-var id_token
 
 exports.getAccessToken = () => {
     return access_token; 
@@ -17,7 +14,6 @@ module.exports.login = async (req, res, next) => {
     else{
         req.user = user;
     }
-    console.log(req.user)
     next()
 }
 
@@ -27,4 +23,12 @@ module.exports.setAccessToken = async (access_token, sub) => {
     console.log("Found user: ", user);
     user.access_token = access_token;
     await userService.update(user);
+}
+
+module.exports.getUser = async (req, res, next) => {
+    console.log("Getting user");
+    let user = await userService.getBySub(req.user_payload.sub)
+    console.log("Found user: ", user);
+    req.user = user;
+    next();
 }

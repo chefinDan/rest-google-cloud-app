@@ -38,9 +38,31 @@ async function verify (token) {
 
 }
 
+module.exports.verifyCreds = async (req, res, next) => {
+    console.log("Verifying user jwt")
+    let jwt = req.get('Authorization')
+    if(!jwt){
+        next({'status': 400, msg: 'Authorization required to access this resource'})
+        return;
+    }
+    var parts = jwt.split(' ');
+    if (parts.length === 2) {
+        var scheme = parts[0];
+        var credentials = parts[1];
+
+        if (/^Bearer$/i.test(scheme)) {
+            token = credentials;
+            req.user_payload = await verify(credentials).catch(err => { next({status: 401, msg: 'invalid authorization token' }) });
+            next();
+            return;
+        }
+   }
+   next({'status': 400, msg: 'Authorization header is malformed'})
+}
+
+
 module.exports.verifyLogin = async (req, res, next) => {
     console.log("Verifying token")
-    console.log(req);
     let payload = await verify(req.body.idtoken)
     req.user_payload = payload
     next();
@@ -71,7 +93,6 @@ module.exports.checkAuth = async (req, res, next) => {
         console.log('Found access_token')
         res.status(201).send({ authStatus: true, msg: 'You have already authorized this application' });
     }
-
 }
 
 module.exports.redirect = async (req, res, next) => {
@@ -97,5 +118,11 @@ module.exports.redirect = async (req, res, next) => {
     catch(err){
         next(err)
     }
+}
+
+module.exports.uri = (req, res, next) => {
+    state = uuid();
+    let oauth_uri = `${project.jwt.authorization_endpoint}?client_id=${clientId.client_id}&redirect_uri=${redirect_uri}&scope=${project.auth.scope}&response_type=code&state=${state}`
+    res.status(200).json({oauth_uri: oauth_uri} );
 }
 

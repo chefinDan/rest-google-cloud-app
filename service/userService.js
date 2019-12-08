@@ -15,10 +15,11 @@ module.exports.getBySub = async (sub) => {
     try {
         await transaction.run();
         const queryResult = await datastore.runQuery(query);
-        // console.log("user query result: ", queryResult);
         if(!queryResult[0])
             return null
-        return queryResult[0][0]; 
+        let user = queryResult[0][0];
+        user.id = user[datastore.KEY].id
+        return user;
     }
     catch (err) {
         transaction.rollback();

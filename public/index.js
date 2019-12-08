@@ -1,4 +1,5 @@
 'use strict'
+var oauth_uri;
 
 function onSignIn(googleUser) {
 
@@ -17,10 +18,11 @@ function onSignIn(googleUser) {
         let res = JSON.parse(xhr.response);
         console.log(res);
         if(res.authStatus === false){
+            oauth_uri = res.oauth_uri;
             let auth_link = document.createElement('a')
             auth_link.id = "auth-btn"
             auth_link.className = 'center'
-            auth_link.href = res.oauth_uri
+            auth_link.href = oauth_uri
             auth_link.innerText = 'Authorize Google'
             body[0].appendChild(auth_link);
         }
@@ -29,6 +31,17 @@ function onSignIn(googleUser) {
             msg.className = 'center'
             msg.innerText = res.msg
             body[0].appendChild(msg);
+            xhr.open('GET', 'http://localhost:8080/oauth-uri');
+            xhr.onload = function() {
+                let res = JSON.parse(xhr.response);
+                let auth_link = document.createElement('a')
+                auth_link.id = "auth-btn"
+                auth_link.className = 'center'
+                auth_link.href = res.oauth_uri
+                auth_link.innerText = 'Reauthorize Google'
+                body[0].appendChild(auth_link);
+            }
+            xhr.send();
         }
     };
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');

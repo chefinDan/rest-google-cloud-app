@@ -38,13 +38,13 @@ exports.createBoat = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log("=== Creating new boat\n", req.body);
-            console.log(req.user)
-            req.body.owner_id = req.user.sub;
-            req.body.owner = req.user.family_name;
+            console.log("=== for user: ", req.user);
+            req.body.owner_id = req.user.id;
+            req.body.owner = req.user.name.last;
             let createdBoat = await boatService.createBoat(req.body)
-            delete createdBoat.owner_id
             createdBoat.self = `${req.protocol}://${req.get('host')}${req.route.path}/${createdBoat.id}`
-            res.status(201).json(createdBoat);
+            req.boat = createdBoat
+            next();
         })
         .catch(next)
 }
@@ -52,29 +52,26 @@ exports.createBoat = (req, res, next) => {
 exports.getBoat = (req, res, next) => {
     checkValidation(req)
     .then(async () => {
-            console.log(`=== Getting boat: ${req.params.boat_id} for user ${req.user.family_name}\n`);
-            let boat = await boatService.getBoat(req.params.boat_id)
-            if(req.params.user_id !== req.user.family_name){
+            console.log(`=== Getting boat: ${req.params.boat_id} for user ${req.user.name.last}\n`);
+            if(req.params.user_id !== req.user.id){
                 next({status: 401, msg: "You do not have permission to access this resource"});
                 return;
             }
-            if(boat.owner_id !== req.user.sub){
+            let boat = await boatService.getBoat(req.params.boat_id)
+            if(boat.owner_id !== req.user.id){
                 next({status: 401, msg: "You do not have permission to access this resource"});
                 return;
             }
             boat.self = `${req.protocol}://${req.get('host')}${req.path}`
-            delete boat.owner_id
-            if(req.accepts('application/json') === 'application/json')
-                res.status(200).json(boat);
-            else
-                res.status(200).send(json2html.transform(boat, template));
+            req.boat = boat;
+            next();
         })
         .catch(next)
 }
 
 exports.deleteBoat = (req, res, next) => {
     console.log(`=== Deleting boat: ${req.params.id}\n`);
-    boatService.deleteBoat(req.params.id, req.user.sub)
+    boatService.deleteBoat(req.params.id, req.user_payload.sub)
         .then(() => {
             res.status(204).send();
         })
@@ -97,21 +94,22 @@ exports.listBoatsPublic = (req, res, next) => {
         .catch(next)
 }
 
-exports.listBoats = (req, res, next) => {
+module.exports.listBoats = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
-            console.log("=== Getting all boats for user ", req.user.family_name);
-            if(req.params.user_id !== req.user.family_name){
+            console.log("=== Getting all boats for user ", req.user.name.last);
+            if(req.params.user_id !== req.user.id){
                 next({status: 401, msg: `Not permitted to view resources for ${req.params.user_id}`});
-                return NULL;
+                return null;
             }
-            let data = await boatService.listBoats(req.query.next, req.user.sub)
+            let data = await boatService.listBoats(req.query.next, req.user.id)
             for (let boat of data.entities) {
                 boat.self = `${req.protocol}://${req.get('host')}${req.path}/${boat.id}`
             }
             if (data.next)
-                data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);            
-            res.status(200).json(data);
+                data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);
+            req.boats = data;
+            next();            
         })
         .catch(next)
 }
