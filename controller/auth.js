@@ -56,7 +56,7 @@ module.exports.verifyCreds = async (req, res, next) => {
             next();
             return;
         }
-   }
+    }
    next({'status': 400, msg: 'Authorization header is malformed'})
 }
 

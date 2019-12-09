@@ -4,7 +4,6 @@ const { Datastore } = require('@google-cloud/datastore');
 const { Boat } = require('../models/Boat');
 const { Load } = require('../models/Load');
 const { project } = require('../project')
-const loadController = require('../controller/load')
 
 const limit = project.response.limit;
 const projectId = project.id;   
@@ -120,8 +119,9 @@ exports.deleteBoat = async (boatId, owner_id) => {
     }
 }
 exports.updateBoat = async (new_boat, id) => {
-    let transaction = datastore.transaction();
+    const transaction = datastore.transaction();
     let boatKey = createKey(Boat, id);
+    let toSave = [];
     
     try {
         await transaction.run();
@@ -130,53 +130,77 @@ exports.updateBoat = async (new_boat, id) => {
         boat.name = (new_boat.name) ? new_boat.name : boat.name
         boat.type = (new_boat.type) ? new_boat.type : boat.type
         boat['length'] = (new_boat['length']) ? new_boat['length'] : boat['length']
-
+        
+        // If new boat has loads, and the old boat does not,
+        // Then simply add the new loads to the boat. Nothing to remove. 
+        if(hasLoads(new_boat) && hasEmptyLoad(boat)){
+            for(const load_id of new_boat.loads){
+                let loadKey = createKey(Load, load_id);
+                let [load] = await transaction.get(loadKey)
+                if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
+                load.boat = boatKey.id;
+                toSave.push({
+                    'key': loadKey,
+                    'data': load 
+                });
+            }
+        }
         // If new boat has a loads array, and the old boat also has a loads array
         // Then remove all loads on old boat, and then add all loads from new boat 
-        if(hasLoads(new_boat) && hasLoads(boat)){
-            boat.loads.forEach(async load_id => {
+        else if(hasLoads(new_boat) && hasLoads(boat)){
+            for(const load_id of boat.loads){
                 let loadKey = createKey(Load, load_id);
                 let [load] = await transaction.get(loadKey)
                 if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
                 load.boat = null
-                await transaction.save({
+                toSave.push({
                     'key': loadKey,
                     'data': load 
-                });
-            })
-            new_boat.loads.forEach(async load_id => {
+                })
+            }
+            for(const load_id of new_boat.loads){
                 let loadKey = createKey(Load, load_id);
                 let [load] = await transaction.get(loadKey)
                 if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
                 load.boat = boatKey.id
-                await transaction.save({
+                toSave.push({
                     'key': loadKey,
                     'data': load 
                 });
-            });
-            boat.loads = new_boat.loads
+            }
         }
-        // else if new boat has loads, and the old boat does not,
-        // Then simply add the new loads to the boat. Nothing to remove 
-        else if(hasLoads(new_boat) && !hasLoads(boat)){
-            new_boat.loads.forEach(async load_id => {
+        // else if the new boat has an empty loads array and the old has loads
+        // then remove old loads and add nothing.
+        else if(hasEmptyLoad(new_boat) && hasLoads(boat)){
+            for(const load_id of boat.loads){
                 let loadKey = createKey(Load, load_id);
                 let [load] = await transaction.get(loadKey)
                 if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
-                load.boat = boatKey.id
-                await transaction.save({
+                load.boat = null
+                toSave.push({
                     'key': loadKey,
                     'data': load 
-                });
-            });
-            boat.loads = new_boat.loads
+                })
+            }
+        }
+        // else if the new boat has empty load, and the old boat has empty load
+        // Then do nothing. 
+        else if(hasEmptyLoad(new_boat) && hasEmptyLoad(boat)){
+            //do nothing
         }
 
-        await transaction.save({
+        if(!new_boat.loads)
+            boat.loads = []
+        else
+            boat.loads = new_boat.loads
+            
+        toSave.push({
             'key': boatKey,
             'data': boat
-        })
-        await transaction.commit()
+        });
+        await transaction.save(toSave);
+        await transaction.commit();
+        
         boat.id = boatKey.id
         return boat
     }
@@ -236,7 +260,14 @@ function getParentId() {
 }
 
 function hasLoads(boatProps){
-    if(Array.isArray(boatProps.loads) && boatProps.loads.length !== 0){
+    if(Array.isArray(boatProps.loads) && boatProps.loads.length > 0){
+        return true
+    }
+    return false
+}
+
+function hasEmptyLoad(boatProps){
+    if(Array.isArray(boatProps.loads) && boatProps.loads.length === 0){
         return true
     }
     return false

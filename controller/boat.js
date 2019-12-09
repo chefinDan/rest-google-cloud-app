@@ -71,9 +71,9 @@ exports.getBoat = (req, res, next) => {
 
 exports.deleteBoat = (req, res, next) => {
     console.log(`=== Deleting boat: ${req.params.id}\n`);
-    boatService.deleteBoat(req.params.id, req.user_payload.sub)
+    boatService.deleteBoat(req.params.id, req.user.id)
         .then(() => {
-            res.status(204).send();
+            next();
         })
         .catch(next)
 }
@@ -98,14 +98,13 @@ module.exports.listBoats = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log("=== Getting all boats for user ", req.user.name.last);
-            if(req.params.user_id !== req.user.id){
-                next({status: 401, msg: `Not permitted to view resources for ${req.params.user_id}`});
-                return null;
-            }
+            if(req.params.user_id !== req.user.id)
+                throw {status: 401, msg: `Not permitted to view resources for ${req.params.user_id}`}
+            
             let data = await boatService.listBoats(req.query.next, req.user.id)
-            for (let boat of data.entities) {
+            for (let boat of data.entities)
                 boat.self = `${req.protocol}://${req.get('host')}${req.path}/${boat.id}`
-            }
+            
             if (data.next)
                 data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);
             req.boats = data;
@@ -118,9 +117,13 @@ exports.updateBoat = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log(`=== Updating boat ${req.params.id} with ${JSON.stringify(req.body)}\n`);
-            let patchedBoat = await boatService.updateBoat(req.body, req.params.id)
-            patchedBoat.self = `${req.protocol}://${req.get('host')}/boats/${patchedBoat.id}`
-            res.status(200).json(patchedBoat);
+            let boat = await boatService.getBoat(req.params.id);
+            if(boat.owner_id !== req.user.id)
+                throw {status: 401, msg: `Not permitted to modify this resource`};
+            boat = await boatService.updateBoat(req.body, req.params.id)
+            boat.self = `${req.protocol}://${req.get('host')}/boats/${boat.id}`;
+            res.boat = boat;
+            next();
         })
         .catch(next)
 }
