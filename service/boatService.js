@@ -12,7 +12,7 @@ var datastore = new Datastore({projectId:projectId});
 const parent = project['root-entity'];
 const ancestorKey = datastore.key([parent.kind, parseInt(parent.id)]);
 
-exports.createBoat = async boat => {
+module.exports.createBoat = async boat => {
     let transaction = datastore.transaction();
     let boatKey = createKey(Boat);    
     let nameQuery = datastore.createQuery(Boat).hasAncestor(ancestorKey).filter('name', boat.name);
@@ -46,10 +46,9 @@ exports.createBoat = async boat => {
         transaction.rollback()
         throw err
     }
-
 }
 
-exports.listBoats = async (cursor, sub) => {
+module.exports.listBoats = async (cursor, sub) => {
     const entities = [];
     let query;
     if(sub)
@@ -83,7 +82,7 @@ exports.listBoats = async (cursor, sub) => {
     return res;
 }
 
-exports.getBoat = async boatId => {
+module.exports.getBoat = async boatId => {
     const boatKey = createKey(Boat, boatId)
     const transaction = datastore.transaction();
     try {
@@ -102,7 +101,7 @@ exports.getBoat = async boatId => {
 
 }
 
-exports.deleteBoat = async (boatId, owner_id) => {
+module.exports.deleteBoat = async (boatId, owner_id) => {
     const boatKey = createKey(Boat, boatId)
     const transaction = datastore.transaction();
     try {
@@ -110,6 +109,9 @@ exports.deleteBoat = async (boatId, owner_id) => {
         const [boat] = await transaction.get(boatKey);
         if (!boat) { throw { 'status': 403, 'msg': `Entity id: ${boatId} not found` } }
         if(boat.owner_id !== owner_id) { throw { 'status': 403, 'msg': `You do not own the requested boat` }}
+        if(hasLoads(boat))
+            await removeBoatFromLoads(boat.loads, transaction);
+
         await transaction.delete(boatKey);
         await transaction.commit();
     }
@@ -118,10 +120,10 @@ exports.deleteBoat = async (boatId, owner_id) => {
         throw err
     }
 }
-exports.updateBoat = async (new_boat, id) => {
+
+module.exports.updateBoat = async (new_boat, id) => {
     const transaction = datastore.transaction();
     let boatKey = createKey(Boat, id);
-    let toSave = [];
     
     try {
         await transaction.run();
@@ -131,7 +133,112 @@ exports.updateBoat = async (new_boat, id) => {
         boat.type = (new_boat.type) ? new_boat.type : boat.type
         boat['length'] = (new_boat['length']) ? new_boat['length'] : boat['length']
         
-        // If new boat has loads, and the old boat does not,
+        await updateLoadsInDatabase(new_boat, boatKey, transaction)
+
+        if(!new_boat.loads)
+            boat.loads = []
+        else
+            boat.loads = new_boat.loads
+
+        await transaction.save({
+            'key': boatKey,
+            'data': boat
+        });
+        await transaction.commit();
+        
+        boat.id = boatKey.id
+        return boat
+    }
+    catch (err) {
+        transaction.rollback()
+        throw err
+    }
+}
+
+module.exports.replaceBoat = async (newData, id) => {
+    const transaction = datastore.transaction();
+    let boatKey = createKey(Boat, id);
+
+    try {
+        await transaction.run();
+        const [boat] = await transaction.get(boatKey);
+        if (!boat) { throw { 'status': 404, 'details': `Boat id: ${id} not found` } }
+        newData.owner_id = boat.owner_id;
+        newData.owner = boat.owner;
+        await updateLoadsInDatabase(newData, boatKey, transaction);
+        await transaction.save({
+            'key': boatKey,
+            'data': newData
+        })
+        await transaction.commit()
+        newData.id = boatKey.id
+        
+        return newData
+    }
+    catch (err) {
+        transaction.rollback()
+        throw err
+    }
+}
+
+function createQuery(type, prop, keys){
+    return keys.map((key) => { return datastore.createQuery(type).hasAncestor(ancestorKey).filter(prop, key); });
+}
+
+function createKey(type, id = null){
+    if(id){
+        return datastore.key([parent.kind, parseInt(parent.id), type, parseInt(id)]);
+    }
+    return datastore.key([parent.kind, parseInt(parent.id), type]);
+}
+
+async function runQuery(query){
+    let promises = query.map(async query => { return await query.run(); });
+    return await Promise.all(promises);
+    
+}
+
+function getParentId() {
+    const query = datastore.createQuery('parent').select('__key__');
+    query.run()
+        .then(([[queryResult]]) => {
+            parentId = queryResult[datastore.KEY].id; 
+        });
+}
+
+function hasLoads(boatProps){
+    if(Array.isArray(boatProps.loads) && boatProps.loads.length > 0){
+        return true
+    }
+    return false
+}
+
+function hasEmptyLoad(boatProps){
+    if(Array.isArray(boatProps.loads) && boatProps.loads.length === 0){
+        return true
+    }
+    return false
+}
+
+async function removeBoatFromLoads(loadIds, transaction){
+    let toSave = [];
+    for(const load_id of loadIds){
+        let loadKey = createKey(Load, load_id);
+        let [load] = await transaction.get(loadKey)
+        if (!load) { throw { 'status': 404, 'details': `Load id: ${load_id} not found` } }
+        load.boat = null;
+        toSave.push({
+            'key': loadKey,
+            'data': load 
+        });
+    }
+    await transaction.save(toSave);
+}
+
+async function updateLoadsInDatabase (new_boat, boatKey, transaction){
+    let toSave = [];
+    const [boat] = await transaction.get(boatKey);
+    // If new boat has loads, and the old boat does not,
         // Then simply add the new loads to the boat. Nothing to remove. 
         if(hasLoads(new_boat) && hasEmptyLoad(boat)){
             for(const load_id of new_boat.loads){
@@ -189,96 +296,6 @@ exports.updateBoat = async (new_boat, id) => {
             //do nothing
         }
 
-        if(!new_boat.loads)
-            boat.loads = []
-        else
-            boat.loads = new_boat.loads
-            
-        toSave.push({
-            'key': boatKey,
-            'data': boat
-        });
         await transaction.save(toSave);
-        await transaction.commit();
-        
-        boat.id = boatKey.id
-        return boat
-    }
-    catch (err) {
-        transaction.rollback()
-        throw err
-    }
+
 }
-
-exports.replaceBoat = async (newData, id) => {
-    let transaction = datastore.transaction();
-    let boatKey = createKey(Boat, id);
-
-    try {
-        await transaction.run();
-        const [boat] = await transaction.get(boatKey);
-        if (!boat) { throw { 'status': 404, 'details': `Boat id: ${id} not found` } }
-        await transaction.save({
-            'key': boatKey,
-            'data': newData
-        })
-        await transaction.commit()
-        newData.id = boatKey.id
-        console.log(newData);
-        
-        return newData
-    }
-    catch (err) {
-        transaction.rollback()
-        throw err
-    }
-}
-
-function createQuery(type, prop, keys){
-    return keys.map((key) => { return datastore.createQuery(type).hasAncestor(ancestorKey).filter(prop, key); });
-}
-
-function createKey(type, id = null){
-    if(id){
-        return datastore.key([parent.kind, parseInt(parent.id), type, parseInt(id)]);
-    }
-    return datastore.key([parent.kind, parseInt(parent.id), type]);
-}
-
-async function runQuery(query){
-    let promises = query.map(async query => { return await query.run(); });
-    return await Promise.all(promises);
-    
-}
-
-function getParentId() {
-    const query = datastore.createQuery('parent').select('__key__');
-    query.run()
-        .then(([[queryResult]]) => {
-            parentId = queryResult[datastore.KEY].id; 
-        });
-}
-
-function hasLoads(boatProps){
-    if(Array.isArray(boatProps.loads) && boatProps.loads.length > 0){
-        return true
-    }
-    return false
-}
-
-function hasEmptyLoad(boatProps){
-    if(Array.isArray(boatProps.loads) && boatProps.loads.length === 0){
-        return true
-    }
-    return false
-}
-// const service = {
-//     'createBoat': createBoat,
-//     'listBoats': listBoats,
-//     'getBoat': getBoat,
-//     'deleteBoat': deleteBoat,
-//     'updateBoat': updateBoat,
-//     'replaceBoat': replaceBoat
-// }
-
-// module.exports.boatService = service

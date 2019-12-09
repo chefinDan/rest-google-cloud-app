@@ -1,15 +1,7 @@
 const loadService = require('../service/loadService');
+const boatService = require('../service/boatService');
 const { check, header, validationResult } = require('express-validator')
 
-module.exports.removeLoadFromBoat = async (id) => {
-	try{
-		loadService.removeLoadFromBoat(id);
-
-	}
-	catch(err){
-		throw err
-	}
-}
 
 module.exports.listLoadsPublic = (req, res, next) => {
     checkValidation(req)
@@ -47,21 +39,32 @@ module.exports.listLoads = (req, res, next) => {
         .catch(next)
 }
 
+/** Create a load and update boat with load if boat id specified */
 module.exports.createLoad = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log("=== Creating new load\n", req.body);
 			console.log("=== for user: ", req.user);
+			let boat;
 			req.body.owner = req.user.name.last;
 			req.body.owner_id = req.user.id
-            let load = await loadService.createLoad(req.body)
+			if(req.body.boat){
+				boat = await boatService.getBoat(req.body.boat);
+				if(boat.owner_id !== req.user.id) { throw { 'status': 403, 'msg': `You do not own the requested boat` }}
+			}
+			let load = await loadService.createLoad(req.body)
+			if(load.boat){
+				boat.loads.push(load.id);
+				await boatService.updateBoat(boat, boat.id) 
+			}
             load.self = `${req.protocol}://${req.get('host')}${req.route.path}/${load.id}`
-            req.load = load
+            res.load = load
             next();
         })
         .catch(next)
 }
 
+/** Get a load */
 exports.getLoad = (req, res, next) => {
     checkValidation(req)
     .then(async () => {
@@ -78,14 +81,45 @@ exports.getLoad = (req, res, next) => {
         .catch(next)
 }
 
-module.exports.deleteLoad = (req, res, next) => {
-    console.log(`=== Deleting load: ${req.params.id}\n`);
+module.exports.updateLoad = async (req, res, next) => {
+	checkValidation(req)
+        .then(async () => {
+            console.log(`=== Updating load ${req.params.load_id} with ${JSON.stringify(req.body)}\n`);
+            let load = await loadService.getLoad(req.params.load_id);
+            if(load.owner_id !== req.user.id)
+                throw {status: 401, msg: `Not permitted to modify this resource`};
+            load = await loadService.updateLoad(req.body, req.params.load_id)
+            load.self = `${req.protocol}://${req.get('host')}/loads/${load.id}`;
+            res.load = load;
+            next();
+        })
+        .catch(next)	
+}
+
+module.exports.deleteLoad = async (req, res, next) => {
+	console.log(`=== Deleting load: ${req.params.id}\n`);
+	try{
+		const load = await loadService.getLoad(req.params.id);
+		if(load.boat){
+			let boat = await boatService.getBoat(load.boat)
+			let loadIdx = boat.loads.indexOf(load.id);
+			if(loadIdx > -1) {boat.loads.splice(loadIdx, 1)}
+			await boatService.updateBoat(boat, boat.id);
+		}
+	}
+	catch(err) {
+		next(err);
+		return;
+	}
+
     loadService.deleteLoad(req.params.id, req.user.id)
         .then(() => {
             next();
         })
         .catch(next)
 }
+
+
 
 module.exports.validate = (method) => {
     switch (method) {
@@ -100,7 +134,8 @@ module.exports.validate = (method) => {
                 header('accept', 'POST /loads only returns application/json').isIn(['application/json', '*/*']),
                 check('weight', 'must be a positive integer').isInt(),
                 check('content', 'must be string with min length of 3').isString().isLength({ min: 3 }),
-                check('delivery_date', 'must be a string with min length 5').isString().isLength({min: 5})
+				check('delivery_date', 'must be a string with min length 5').isString().isLength({min: 5}),
+				check('boat', `must be a string boat id length 16`).isString().isLength({min: 16, max: 16}).optional({nullable:true})
             ]
         }
         case 'listLoads': {
@@ -108,13 +143,14 @@ module.exports.validate = (method) => {
                 header('accept', 'GET /loads only returns application/json').isIn(['application/json', '*/*']),
             ]
         }
-        case 'updateBoat': {
+        case 'updateLoad': {
             return [
                 header('content-type', 'server only accepts application/json').isIn(['application/json']),
-                header('accept', 'PATCH /boats/:id returns only application/json').isIn(['application/json', '*/*']),
-                check('name', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
-                check('type', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
-                check('length', 'must be positive integer').isInt().optional({nullable: true})
+                header('accept', 'PATCH /loads/:load_id returns only application/json').isIn(['application/json', '*/*']),
+                check('weight', 'must be a positive integer').isInt().bail().optional({nullable: true}),
+                check('content', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
+				check('delivery_date', 'must be string min length 5').isString().bail().isLength({min: 5}).optional({nullable: true}),
+				check('boat', `must be a string boat id length 16`).isString().bail().isLength({min: 16, max: 16}).optional({nullable:true})
             ]
         }
         case 'replaceBoat': {

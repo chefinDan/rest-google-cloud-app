@@ -34,7 +34,7 @@ const template = {
     ]
 };
 
-exports.createBoat = (req, res, next) => {
+module.exports.createBoat = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log("=== Creating new boat\n", req.body);
@@ -49,7 +49,7 @@ exports.createBoat = (req, res, next) => {
         .catch(next)
 }
 
-exports.getBoat = (req, res, next) => {
+module.exports.getBoat = (req, res, next) => {
     checkValidation(req)
     .then(async () => {
             console.log(`=== Getting boat: ${req.params.boat_id} for user ${req.user.name.last}\n`);
@@ -69,7 +69,7 @@ exports.getBoat = (req, res, next) => {
         .catch(next)
 }
 
-exports.deleteBoat = (req, res, next) => {
+module.exports.deleteBoat = (req, res, next) => {
     console.log(`=== Deleting boat: ${req.params.id}\n`);
     boatService.deleteBoat(req.params.id, req.user.id)
         .then(() => {
@@ -78,7 +78,7 @@ exports.deleteBoat = (req, res, next) => {
         .catch(next)
 }
 
-exports.listBoatsPublic = (req, res, next) => {
+module.exports.listBoatsPublic = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log("=== Getting all boats ");
@@ -113,7 +113,7 @@ module.exports.listBoats = (req, res, next) => {
         .catch(next)
 }
 
-exports.updateBoat = (req, res, next) => {
+module.exports.updateBoat = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log(`=== Updating boat ${req.params.id} with ${JSON.stringify(req.body)}\n`);
@@ -128,17 +128,21 @@ exports.updateBoat = (req, res, next) => {
         .catch(next)
 }
 
-exports.replaceBoat = (req, res, next) => {
+module.exports.replaceBoat = (req, res, next) => {
     checkValidation(req)
         .then(async () => {
             console.log(`=== Replacing boat ${req.params.id} with ${JSON.stringify(req.body)}\n`);
-            let boat = await boatService.replaceBoat(req.body, req.params.id)
-            res.set('Location', `${req.protocol}://${req.get('host')}/boats/${boat.id}`).status(303).send();
+            let boat = await boatService.getBoat(req.params.id);
+            if(boat.owner_id !== req.user.id)
+                throw {status: 401, msg: `Not permitted to modify this resource`};
+            boat = await boatService.replaceBoat(req.body, req.params.id)
+            res.boat = boat;
+            next();
         })  
         .catch(next)
 }
 
-exports.validate = (method) => {
+module.exports.validate = (method) => {
     switch (method) {
         case 'getBoat':
             return [
@@ -165,7 +169,8 @@ exports.validate = (method) => {
                 header('accept', 'PATCH /boats/:id returns only application/json').isIn(['application/json', '*/*']),
                 check('name', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
                 check('type', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
-                check('length', 'must be positive integer').isInt().optional({nullable: true})
+                check('length', 'must be positive integer').isInt().optional({nullable: true}),
+                check('loads', `must be an array property of optional load id's. If no loads then make empty array.`).isArray().optional({nullable: false})
             ]
         }
         case 'replaceBoat': {
@@ -173,7 +178,8 @@ exports.validate = (method) => {
                 header('content-type', 'server only accepts application/json').isIn(['application/json']),
                 check('name', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }),
                 check('type', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }),
-                check('length', 'must be positive integer').isInt()
+                check('length', 'must be positive integer').isInt(),
+                check('loads', `must be an array property of optional load id's. If no loads then make empty array.`).isArray()
             ]
         }
     }

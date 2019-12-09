@@ -56,6 +56,7 @@ router.get('/loads',
 /***            Private Routes             ***/
 /*********************************************/
 
+/*------------User------------*/
 /* get user info */
 router.get('/users/me',
     authController.verifyCreds,
@@ -64,15 +65,18 @@ router.get('/users/me',
         res.status(200).json(req.user); 
     }
 );
+/*----------------------------*/
 
-/* List boats for user */
-router.get('/users/:user_id/boats',
+/*-----------Boats------------*/
+/* Create boat */
+router.post('/boats',
     authController.verifyCreds,
     userController.getUser,
-    boatController.validate('getBoat'),
-    boatController.listBoats,
+    jsonParser,
+    boatController.validate('createBoat'),
+    boatController.createBoat,
     (req, res) => {
-        res.status(200).json(req.boats);
+        res.status(201).json(req.boat);
     }
 );
 
@@ -89,15 +93,14 @@ router.get('/users/:user_id/boats/:boat_id',
     }
 );
 
-/* Create boat */
-router.post('/boats',
+/* List boats for user */
+router.get('/users/:user_id/boats',
     authController.verifyCreds,
     userController.getUser,
-    jsonParser,
-    boatController.validate('createBoat'),
-    boatController.createBoat,
+    boatController.validate('getBoat'),
+    boatController.listBoats,
     (req, res) => {
-        res.status(201).json(req.boat);
+        res.status(200).json(req.boats);
     }
 );
 
@@ -106,11 +109,24 @@ router.patch('/boats/:id',
     authController.verifyCreds,
     userController.getUser,
     jsonParser,
+    boatController.validate('updateBoat'),
     boatController.updateBoat,
     (req, res) => {
         res.status(200).json(res.boat);
     }
-)
+);
+
+/* Replace an existing boat */
+router.put('/boats/:id',
+    authController.verifyCreds,
+    userController.getUser,
+    jsonParser,
+    boatController.validate('replaceBoat'),
+    boatController.replaceBoat,
+    (req, res) => {
+        res.set('Location', `${req.protocol}://${req.get('host')}/users/${req.user.id}/boats/${res.boat.id}`).status(303).send();
+    }
+);
 
 /* Delete boat by boat_id */
 router.delete('/boats/:id',
@@ -122,6 +138,7 @@ router.delete('/boats/:id',
     }
 );
 
+/*-------------Loads------------*/
 /* Create load */
 router.post('/loads',
     authController.verifyCreds,
@@ -130,7 +147,18 @@ router.post('/loads',
     loadController.validate('createLoad'),
     loadController.createLoad,
     (req, res) => {
-        res.status(201).json(req.load);
+        res.status(201).json(res.load);
+    }
+);
+
+/* List loads for user */
+router.get('/users/:user_id/loads',
+    authController.verifyCreds,
+    userController.getUser,
+    loadController.validate('listLoads'),
+    loadController.listLoads,
+    (req, res) => {
+        res.status(200).json(res.loads);
     }
 );
 
@@ -145,16 +173,16 @@ router.get('/loads/:load_id',
     }
 );
 
-/* List loads for user */
-router.get('/users/:user_id/loads',
+router.patch('/loads/:load_id',
     authController.verifyCreds,
     userController.getUser,
-    loadController.validate('listLoads'),
-    loadController.listLoads,
+    jsonParser,
+    loadController.validate('updateLoad'),
+    loadController.updateLoad,
     (req, res) => {
-        res.status(200).json(res.loads);
+        res.status(200).json(res.load);
     }
-)
+);
 
 /* Delete load by load_id */
 router.delete('/loads/:id',
