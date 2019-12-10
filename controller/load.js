@@ -96,6 +96,20 @@ module.exports.updateLoad = async (req, res, next) => {
         .catch(next)	
 }
 
+module.exports.replaceLoad = (req, res, next) => {
+    checkValidation(req)
+        .then(async () => {
+            console.log(`=== Replacing load ${req.params.load_id} with ${JSON.stringify(req.body)}\n`);
+            let load = await loadService.getLoad(req.params.load_id);
+            if(load.owner_id !== req.user.id)
+                throw {status: 401, msg: `Not permitted to modify this resource`};
+            load = await loadService.replaceLoad(req.body, req.params.load_id)
+            res.load = load;
+            next();
+        })  
+        .catch(next)
+}
+
 module.exports.deleteLoad = async (req, res, next) => {
 	console.log(`=== Deleting load: ${req.params.id}\n`);
 	try{
@@ -153,12 +167,13 @@ module.exports.validate = (method) => {
 				check('boat', `must be a string boat id length 16`).isString().bail().isLength({min: 16, max: 16}).optional({nullable:true})
             ]
         }
-        case 'replaceBoat': {
+        case 'replaceLoad': {
             return [
                 header('content-type', 'server only accepts application/json').isIn(['application/json']),
-                check('name', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }),
-                check('type', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }),
-                check('length', 'must be positive integer').isInt()
+                check('weight', 'must be a positive integer').isInt().bail(),
+                check('content', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }),
+				check('delivery_date', 'must be string min length 5').isString().bail().isLength({min: 5}),
+				check('boat', `must be a string boat id length 16`).isString().bail().isLength({min: 16, max: 16}).optional({nullable: true})
             ]
         }
     }

@@ -173,6 +173,7 @@ router.get('/loads/:load_id',
     }
 );
 
+/** Update properties of a load */
 router.patch('/loads/:load_id',
     authController.verifyCreds,
     userController.getUser,
@@ -181,6 +182,18 @@ router.patch('/loads/:load_id',
     loadController.updateLoad,
     (req, res) => {
         res.status(200).json(res.load);
+    }
+);
+
+/** replace an existing load */
+router.put('/loads/:load_id',
+    authController.verifyCreds,
+    userController.getUser,
+    jsonParser,
+    loadController.validate('replaceLoad'),
+    loadController.replaceLoad,
+    (req, res) => {
+        res.set('Location', `${req.protocol}://${req.get('host')}/loads/${res.load.id}`).status(303).send();
     }
 );
 

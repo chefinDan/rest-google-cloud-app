@@ -128,6 +128,36 @@ module.exports.updateLoad = async (new_load, id) => {
     }
 }
 
+module.exports.replaceLoad = async (new_load, id) => {
+    const transaction = datastore.transaction();
+    let loadKey = createKey(Load, id);
+    try {
+        await transaction.run();
+        const [load] = await transaction.get(loadKey);
+		if (!load) { throw { 'status': 404, 'details': `Load id: ${id} not found` } }
+		load.content = new_load.content
+		load.delivery_date = new_load.delivery_date
+		load.weight = new_load.weight
+		await updateBoatsInDatabase(new_load, loadKey, transaction);
+		if(new_load.boat === null)
+			 load.boat = null
+		else if(new_load.boat !== undefined)
+			load.boat = new_load.boat;
+
+        await transaction.save({
+            'key': loadKey,
+            'data': load
+        });
+        await transaction.commit()
+        load.id = loadKey.id
+        return load
+    }
+    catch (err) {
+        transaction.rollback()
+        throw err
+    }
+}
+
 module.exports.deleteLoad = async (loadId, owner_id) => {
     const loadKey = createKey(Load, loadId)
     const transaction = datastore.transaction();
@@ -192,7 +222,7 @@ async function updateBoatsInDatabase (new_load, loadKey, transaction){
         }
         // else if the new load does not have a boat, and the old load has a boat
         // then remove old load's boat. 
-        else if(!new_load.boat && load.boat){
+        else if((new_load.boat === null) && load.boat){
             let boatKey = createKey(Boat, load.boat); // make key for boat with load to remove
 			let [boat] = await transaction.get(boatKey) // get boat with load to remove
 			if (!boat) { throw { 'status': 404, 'details': `Boat id: ${load.boat} not found` } }
