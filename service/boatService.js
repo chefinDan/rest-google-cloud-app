@@ -6,7 +6,8 @@ const { Load } = require('../models/Load');
 const { project } = require('../project')
 
 const limit = project.response.limit;
-const projectId = project.id;   
+const projectId = project.id;
+const boatCntId = project.counter.boat   
 var datastore = new Datastore({projectId:projectId});
 
 const parent = project['root-entity'];
@@ -14,7 +15,8 @@ const ancestorKey = datastore.key([parent.kind, parseInt(parent.id)]);
 
 module.exports.createBoat = async boat => {
     let transaction = datastore.transaction();
-    let boatKey = createKey(Boat);    
+    let boatKey = createKey(Boat);
+    let counterKey = createKey('Counter', boatCntId);   
     let nameQuery = datastore.createQuery(Boat).hasAncestor(ancestorKey).filter('name', boat.name);
     
     try{
@@ -37,6 +39,9 @@ module.exports.createBoat = async boat => {
             }
         }
         await transaction.save(createdBoat);
+        let [boatCount] = await transaction.get(counterKey);
+        boatCount.value += 1;
+        await transaction.save({'key': counterKey, 'data': boatCount});
         await transaction.commit()
         createdBoat = createdBoat.data
         createdBoat.id = boatKey.id
@@ -72,9 +77,14 @@ module.exports.listBoats = async (cursor, sub) => {
             'owner': entity.owner
         });
     }
-    
-    console.log(entities);
-    let res = {'entities': entities}
+
+    const transaction = datastore.transaction();
+    let counterKey = createKey('Counter', boatCntId);
+    await transaction.run();
+    let [boatCount] = await transaction.get(counterKey);
+    await transaction.commit();
+
+    let res = {'entities': entities, 'total': boatCount.value}
     
     if(queryResult[1].moreResults === "MORE_RESULTS_AFTER_LIMIT")
         res.next = queryResult[1].endCursor;
@@ -107,12 +117,16 @@ module.exports.deleteBoat = async (boatId, owner_id) => {
     try {
         await transaction.run();
         const [boat] = await transaction.get(boatKey);
-        if (!boat) { throw { 'status': 403, 'msg': `Entity id: ${boatId} not found` } }
-        if(boat.owner_id !== owner_id) { throw { 'status': 403, 'msg': `You do not own the requested boat` }}
+        if (!boat) { throw { 'status': 404, 'msg': `Entity id: ${boatId} not found` } }
+        if(boat.owner_id !== owner_id) { throw { 'status': 403, 'msg': `Not permitted to modify this resource` }}
         if(hasLoads(boat))
             await removeBoatFromLoads(boat.loads, transaction);
 
         await transaction.delete(boatKey);
+        let counterKey = createKey('Counter', boatCntId)
+        let [boatCount] = await transaction.get(counterKey);
+        boatCount.value -= 1;
+        await transaction.save({'key': counterKey, 'data': boatCount});
         await transaction.commit();
     }
     catch (err) {

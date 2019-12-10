@@ -18,11 +18,22 @@ const urlencodedParser = bodyParser.urlencoded({extended: false});
 router.get('/',
     authController.loginScreen
 );
+router.post('/', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.delete('/', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
 
 /* Request a oauth url */
 router.get('/oauth-uri',
     authController.uri
 );
+router.post('/oauth-uri', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.delete('/oauth-uri', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/oauth-uri', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/oauth-uri', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/oauth-uri', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+
 
 /* Create a new user */
 router.post('/tokensignin',
@@ -31,17 +42,34 @@ router.post('/tokensignin',
     userController.login,
     authController.checkAuth
 );
+router.get('/tokensignin', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.delete('/tokensignin', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.put('/tokensignin', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.patch('/tokensignin', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.head('/tokensignin', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
 
 /* Oauth Redirect Endpoint */
 router.get('/auth/redirect',
     authController.redirect
 );
+router.post('/auth/redirect', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.delete('/auth/redirect', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/auth/redirect', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/auth/redirect', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/auth/redirect', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
 
 /* List all boats */
 router.get('/boats',
     boatController.validate('listBoats'),
-    boatController.listBoatsPublic
+    boatController.listBoatsPublic,
+    (req, res) => {
+        res.status(200).json(res.boats);
+    }
 );
+router.delete('/boats', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/boats', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/boats', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/boats', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
 
 /* List all loads */
 router.get('/loads',
@@ -51,6 +79,10 @@ router.get('/loads',
         res.status(200).json(res.loads);
     }
 );
+router.delete('/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
 
 /*********************************************/
 /***            Private Routes             ***/
@@ -65,6 +97,11 @@ router.get('/users/me',
         res.status(200).json(req.user); 
     }
 );
+router.post('/users/me', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.delete('/users/me', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/users/me', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/users/me', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/users/me', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
 /*----------------------------*/
 
 /*-----------Boats------------*/
@@ -79,19 +116,11 @@ router.post('/boats',
         res.status(201).json(req.boat);
     }
 );
-
-/* Get boat by boat_id for user */
-router.get('/users/:user_id/boats/:boat_id',
-    authController.verifyCreds,
-    userController.getUser,
-    boatController.getBoat,
-    (req, res) => {
-        if(req.accepts('application/json') === 'application/json')
-            res.status(200).json(req.boat);
-        else
-            res.status(200).send(json2html.transform(req.boat, template));
-    }
-);
+router.get('/boats', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.delete('/boats', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.put('/boats', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.patch('/boats', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.head('/boats', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
 
 /* List boats for user */
 router.get('/users/:user_id/boats',
@@ -101,6 +130,19 @@ router.get('/users/:user_id/boats',
     boatController.listBoats,
     (req, res) => {
         res.status(200).json(req.boats);
+    }
+);
+
+/* Get boat by boat_id */
+router.get('/boats/:boat_id',
+    authController.verifyCreds,
+    userController.getUser,
+    boatController.getBoat,
+    (req, res) => {
+        if(req.accepts('application/json') === 'application/json')
+            res.status(200).json(res.boat);
+        else
+            res.status(200).send(json2html.transform(res.boat, template));
     }
 );
 
@@ -124,7 +166,7 @@ router.put('/boats/:id',
     boatController.validate('replaceBoat'),
     boatController.replaceBoat,
     (req, res) => {
-        res.set('Location', `${req.protocol}://${req.get('host')}/users/${req.user.id}/boats/${res.boat.id}`).status(303).send();
+        res.set('Location', `${req.protocol}://${req.get('host')}/boats/${res.boat.id}`).status(303).send();
     }
 );
 
@@ -137,6 +179,8 @@ router.delete('/boats/:id',
         res.status(204).send();
     }
 );
+router.head('/boats/:id', (req, res, next) => {res.set('Allow', `GET, PATCH, PUT, DELETE`).status(405).send();});
+
 
 /*-------------Loads------------*/
 /* Create load */
@@ -150,6 +194,11 @@ router.post('/loads',
         res.status(201).json(res.load);
     }
 );
+router.get('/loads', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.delete('/loads', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.put('/loads', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.patch('/loads', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
+router.head('/loads', (req, res, next) => {res.set('Allow', `POST`).status(405).send();});
 
 /* List loads for user */
 router.get('/users/:user_id/loads',
@@ -161,6 +210,12 @@ router.get('/users/:user_id/loads',
         res.status(200).json(res.loads);
     }
 );
+router.post('/users/:user_id/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.delete('/users/:user_id/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.put('/users/:user_id/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.patch('/users/:user_id/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+router.head('/users/:user_id/loads', (req, res, next) => {res.set('Allow', `GET`).status(405).send();});
+
 
 /* Get load by load_id */
 router.get('/loads/:load_id',
@@ -206,6 +261,7 @@ router.delete('/loads/:id',
         res.status(204).send();
     }
 );
+router.head('/loads/:id', (req, res, next) => {res.set('Allow', `GET, PATCH, PUT, DELETE`).status(405).send();});
 
 
 

@@ -4,7 +4,8 @@ const { Boat } = require('../models/Boat');
 const { project } = require('../project')
 
 const limit = project.response.limit;
-const projectId = project.id;   
+const projectId = project.id;
+const loadCntId = project.counter.load;   
 var datastore = new Datastore({projectId:projectId});
 
 const parent = project['root-entity'];
@@ -40,9 +41,14 @@ module.exports.listLoads = async (cursor, id) => {
 			'owner_id': entity.owner_id
         });
     }
+
+    const transaction = datastore.transaction();
+    let counterKey = createKey('Counter', loadCntId);
+    await transaction.run();
+    let [loadCount] = await transaction.get(counterKey);
+    await transaction.commit();
     
-    console.log(entities);
-    let res = {'entities': entities}
+    let res = {'entities': entities, 'total': loadCount.value}
     
     if(queryResult[1].moreResults === "MORE_RESULTS_AFTER_LIMIT")
         res.next = queryResult[1].endCursor;
@@ -66,7 +72,11 @@ module.exports.createLoad = async load => {
                 'boat': (load.boat) ? load.boat : null
             }
         }
-		await transaction.save(createdLoad);
+        await transaction.save(createdLoad);
+        let counterKey = createKey('Counter', loadCntId);   
+        let [loadCount] = await transaction.get(counterKey);
+        loadCount.value += 1;
+        await transaction.save({'key': counterKey, 'data': loadCount});
         await transaction.commit()
         createdLoad = createdLoad.data
         createdLoad.id = loadKey.id
@@ -167,6 +177,10 @@ module.exports.deleteLoad = async (loadId, owner_id) => {
         if (!load) { throw { 'status': 403, 'msg': `Entity id: ${loadId} not found` } }
         if(load.owner_id !== owner_id) { throw { 'status': 403, 'msg': `You do not own the requested load` }}
         await transaction.delete(loadKey);
+        let counterKey = createKey('Counter', loadCntId)
+        let [loadCount] = await transaction.get(counterKey);
+        loadCount.value -= 1;
+        await transaction.save({'key': counterKey, 'data': loadCount});
         await transaction.commit();
     }
     catch (err) {

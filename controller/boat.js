@@ -52,18 +52,12 @@ module.exports.createBoat = (req, res, next) => {
 module.exports.getBoat = (req, res, next) => {
     checkValidation(req)
     .then(async () => {
-            console.log(`=== Getting boat: ${req.params.boat_id} for user ${req.user.name.last}\n`);
-            if(req.params.user_id !== req.user.id){
-                next({status: 401, msg: "You do not have permission to access this resource"});
-                return;
-            }
-            let boat = await boatService.getBoat(req.params.boat_id)
-            if(boat.owner_id !== req.user.id){
-                next({status: 401, msg: "You do not have permission to access this resource"});
-                return;
-            }
+            console.log(`=== Getting boat: ${req.params.boat_id}\n`);
+            let boat = await boatService.getBoat(req.params.boat_id);
+            if(boat.owner_id !== req.user.id)
+                throw {status: 403, msg: "Forbidden resource"}
             boat.self = `${req.protocol}://${req.get('host')}${req.path}`
-            req.boat = boat;
+            res.boat = boat;
             next();
         })
         .catch(next)
@@ -85,11 +79,11 @@ module.exports.listBoatsPublic = (req, res, next) => {
             let data = await boatService.listBoats(req.query.next)
             for (let boat of data.entities) {
                 boat.self = `${req.protocol}://${req.get('host')}/users/${boat.owner}/boats/${boat.id}`
-                delete boat.owner_id
             }
             if (data.next)
-                data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);            
-            res.status(200).json(data);
+                data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);
+            res.boats = data
+            next();            
         })
         .catch(next)
 }
@@ -99,7 +93,7 @@ module.exports.listBoats = (req, res, next) => {
         .then(async () => {
             console.log("=== Getting all boats for user ", req.user.name.last);
             if(req.params.user_id !== req.user.id)
-                throw {status: 401, msg: `Not permitted to view resources for ${req.params.user_id}`}
+                throw {status: 403, msg: `Not permitted to view resources for ${req.params.user_id}`}
             
             let data = await boatService.listBoats(req.query.next, req.user.id)
             for (let boat of data.entities)
@@ -119,7 +113,7 @@ module.exports.updateBoat = (req, res, next) => {
             console.log(`=== Updating boat ${req.params.id} with ${JSON.stringify(req.body)}\n`);
             let boat = await boatService.getBoat(req.params.id);
             if(boat.owner_id !== req.user.id)
-                throw {status: 401, msg: `Not permitted to modify this resource`};
+                throw {status: 403, msg: `Not permitted to modify this resource`};
             boat = await boatService.updateBoat(req.body, req.params.id)
             boat.self = `${req.protocol}://${req.get('host')}/boats/${boat.id}`;
             res.boat = boat;
@@ -134,7 +128,7 @@ module.exports.replaceBoat = (req, res, next) => {
             console.log(`=== Replacing boat ${req.params.id} with ${JSON.stringify(req.body)}\n`);
             let boat = await boatService.getBoat(req.params.id);
             if(boat.owner_id !== req.user.id)
-                throw {status: 401, msg: `Not permitted to modify this resource`};
+                throw {status: 403, msg: `Not permitted to modify this resource`};
             boat = await boatService.replaceBoat(req.body, req.params.id)
             res.boat = boat;
             next();
@@ -152,7 +146,7 @@ module.exports.validate = (method) => {
         case 'createBoat': {
             return [
                 header('content-type', 'server only accepts application/json').isIn(['application/json']),
-                header('accept', 'POST /boats only returns application/json').isIn(['application/json', '*/*']),
+                header('accept', 'POST /boats only returns application/json').isIn(['application/json']),
                 check('name', 'must be string with min length of 3').isString().isLength({ min: 3 }),
                 check('type', 'must be string with min length of 3').isString().isLength({ min: 3 }),
                 check('length', 'must be positive integer').isInt(),
@@ -160,13 +154,13 @@ module.exports.validate = (method) => {
         }
         case 'listBoats': {
             return [
-                header('accept', 'GET /boats only returns application/json').isIn(['application/json', '*/*']),
+                header('accept', 'GET /boats only returns application/json').isIn(['application/json']),
             ]
         }
         case 'updateBoat': {
             return [
                 header('content-type', 'server only accepts application/json').isIn(['application/json']),
-                header('accept', 'PATCH /boats/:id returns only application/json').isIn(['application/json', '*/*']),
+                header('accept', 'PATCH /boats/:id returns only application/json').isIn(['application/json']),
                 check('name', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
                 check('type', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
                 check('length', 'must be positive integer').isInt().optional({nullable: true}),

@@ -24,7 +24,7 @@ module.exports.listLoads = (req, res, next) => {
         .then(async () => {
             console.log("=== Getting all loads for user ", req.user.name.last);
             if(req.params.user_id !== req.user.id){
-                next({status: 401, msg: `Not permitted to view resources for ${req.params.user_id}`});
+                next({status: 403, msg: `Not permitted to view resources for ${req.params.user_id}`});
                 return null;
             }
             let data = await loadService.listLoads(req.query.next, req.user.id)
@@ -71,7 +71,7 @@ exports.getLoad = (req, res, next) => {
             console.log(`=== Getting Load: ${req.params.load_id} for user ${req.user.name.last}\n`);
             let load = await loadService.getLoad(req.params.load_id)
             if(load.owner_id !== req.user.id){
-                next({status: 401, msg: "You do not have permission to access this resource"});
+                next({status: 403, msg: "You do not have permission to access this resource"});
                 return;
             }
             load.self = `${req.protocol}://${req.get('host')}${req.path}`
@@ -87,7 +87,7 @@ module.exports.updateLoad = async (req, res, next) => {
             console.log(`=== Updating load ${req.params.load_id} with ${JSON.stringify(req.body)}\n`);
             let load = await loadService.getLoad(req.params.load_id);
             if(load.owner_id !== req.user.id)
-                throw {status: 401, msg: `Not permitted to modify this resource`};
+                throw {status: 403, msg: `Not permitted to modify this resource`};
             load = await loadService.updateLoad(req.body, req.params.load_id)
             load.self = `${req.protocol}://${req.get('host')}/loads/${load.id}`;
             res.load = load;
@@ -102,7 +102,7 @@ module.exports.replaceLoad = (req, res, next) => {
             console.log(`=== Replacing load ${req.params.load_id} with ${JSON.stringify(req.body)}\n`);
             let load = await loadService.getLoad(req.params.load_id);
             if(load.owner_id !== req.user.id)
-                throw {status: 401, msg: `Not permitted to modify this resource`};
+                throw {status: 403, msg: `Not permitted to modify this resource`};
             load = await loadService.replaceLoad(req.body, req.params.load_id)
             res.load = load;
             next();
@@ -114,6 +114,8 @@ module.exports.deleteLoad = async (req, res, next) => {
 	console.log(`=== Deleting load: ${req.params.id}\n`);
 	try{
 		const load = await loadService.getLoad(req.params.id);
+		if(load.owner_id !== req.user.id)
+                throw {status: 403, msg: `Not permitted to modify this resource`};
 		if(load.boat){
 			let boat = await boatService.getBoat(load.boat)
 			let loadIdx = boat.loads.indexOf(load.id);
@@ -139,13 +141,13 @@ module.exports.validate = (method) => {
     switch (method) {
         case 'getLoad':
             return [
-                header('accept', 'GET /loads/:id returns either application/json or text/html').isIn(['application/json', 'text/html', '*/*'])
+                header('accept', 'GET /loads/:id returns either application/json or text/html').isIn(['application/json', 'text/html'])
             ]
 
         case 'createLoad': {
             return [
-                header('content-type', 'server only accepts application/json').isIn(['application/json']),
-                header('accept', 'POST /loads only returns application/json').isIn(['application/json', '*/*']),
+                header('content-type', 'server only accepts application/json').isIn(['application/json']).bail(),
+                header('accept', 'POST /loads only returns application/json').isIn(['application/json']).bail(),
                 check('weight', 'must be a positive integer').isInt(),
                 check('content', 'must be string with min length of 3').isString().isLength({ min: 3 }),
 				check('delivery_date', 'must be a string with min length 5').isString().isLength({min: 5}),
@@ -154,13 +156,13 @@ module.exports.validate = (method) => {
         }
         case 'listLoads': {
             return [
-                header('accept', 'GET /loads only returns application/json').isIn(['application/json', '*/*']),
+                header('accept', 'GET /loads only returns application/json').isIn(['application/json']),
             ]
         }
         case 'updateLoad': {
             return [
-                header('content-type', 'server only accepts application/json').isIn(['application/json']),
-                header('accept', 'PATCH /loads/:load_id returns only application/json').isIn(['application/json', '*/*']),
+                header('content-type', 'server only accepts application/json').isIn(['application/json']).bail(),
+                header('accept', 'PATCH /loads/:load_id returns only application/json').isIn(['application/json']).bail(),
                 check('weight', 'must be a positive integer').isInt().bail().optional({nullable: true}),
                 check('content', 'must be string with min length of 3').isString().bail().isLength({ min: 3 }).optional({nullable: true}),
 				check('delivery_date', 'must be string min length 5').isString().bail().isLength({min: 5}).optional({nullable: true}),

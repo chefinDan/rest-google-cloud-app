@@ -27,8 +27,14 @@ module.exports.setAccessToken = async (access_token, sub) => {
 
 module.exports.getUser = async (req, res, next) => {
     console.log("Getting user");
-    let user = await userService.getBySub(req.user_payload.sub)
-    console.log("Found user: ", user);
-    req.user = user;
-    next();
+    try{
+        let user = await userService.getBySub(req.user_payload.sub)
+        console.log("Found user: ", user);
+        req.user = user;
+        next();
+    }
+    catch(err){
+        next(err);
+    }
+    
 }
