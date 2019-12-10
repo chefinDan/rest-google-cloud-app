@@ -12,7 +12,7 @@ function onSignIn(googleUser) {
     var id_token = googleUser.getAuthResponse().id_token;
 
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost:8080/tokensignin');
+    xhr.open('POST', '/tokensignin');
     xhr.onload = function() {
         let body = document.getElementsByTagName('body')
         let res = JSON.parse(xhr.response);
@@ -31,7 +31,7 @@ function onSignIn(googleUser) {
             msg.className = 'center'
             msg.innerText = res.msg
             body[0].appendChild(msg);
-            xhr.open('GET', 'http://localhost:8080/oauth-uri');
+            xhr.open('GET', '/oauth-uri');
             xhr.onload = function() {
                 let res = JSON.parse(xhr.response);
                 let auth_link = document.createElement('a')
