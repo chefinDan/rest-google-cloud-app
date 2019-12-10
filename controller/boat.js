@@ -78,7 +78,7 @@ module.exports.listBoatsPublic = (req, res, next) => {
             console.log("=== Getting all boats ");
             let data = await boatService.listBoats(req.query.next)
             for (let boat of data.entities) {
-                boat.self = `${req.protocol}://${req.get('host')}/users/${boat.owner}/boats/${boat.id}`
+                boat.self = `${req.protocol}://${req.get('host')}/boats/${boat.id}`
             }
             if (data.next)
                 data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);
@@ -97,7 +97,7 @@ module.exports.listBoats = (req, res, next) => {
             
             let data = await boatService.listBoats(req.query.next, req.user.id)
             for (let boat of data.entities)
-                boat.self = `${req.protocol}://${req.get('host')}${req.path}/${boat.id}`
+                boat.self = `${req.protocol}://${req.get('host')}/boats/${boat.id}`
             
             if (data.next)
                 data.next = `${req.protocol}://${req.get('host')}${req.path}?next=` + encodeURIComponent(data.next);
@@ -140,7 +140,7 @@ module.exports.validate = (method) => {
     switch (method) {
         case 'getBoat':
             return [
-                header('accept', 'GET /boats/:id returns either application/json or text/html').isIn(['application/json', 'text/html', '*/*'])
+                header('accept', 'GET /boats/:id returns only application/json').isIn(['application/json'])
             ]
 
         case 'createBoat': {

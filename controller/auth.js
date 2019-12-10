@@ -42,7 +42,7 @@ module.exports.verifyCreds = async (req, res, next) => {
     console.log("Verifying user jwt")
     let jwt = req.get('Authorization')
     if(!jwt){
-        next({'status': 400, msg: 'Authorization required to access this resource'})
+        next({'status': 401, msg: 'Authorization required to access this resource'})
         return;
     }
     var parts = jwt.split(' ');

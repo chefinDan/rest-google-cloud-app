@@ -137,12 +137,10 @@ router.get('/users/:user_id/boats',
 router.get('/boats/:boat_id',
     authController.verifyCreds,
     userController.getUser,
+    boatController.validate('getBoat'),
     boatController.getBoat,
     (req, res) => {
-        if(req.accepts('application/json') === 'application/json')
-            res.status(200).json(res.boat);
-        else
-            res.status(200).send(json2html.transform(res.boat, template));
+        res.status(200).json(res.boat);
     }
 );
 
